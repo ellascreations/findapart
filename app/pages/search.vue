@@ -1,36 +1,6 @@
 <script setup lang="ts">
-const route = useRoute()
-const filters = reactive({
-  keyword: String(route.query.part || ''), year: String(route.query.year || ''), make: String(route.query.make || ''), model: String(route.query.model || ''), condition: '', country: ''
-})
-const listings = [
-  { id: 1, title: 'Left Front Door Assembly', vehicle: '2021 Toyota Hilux SR5', condition: 'Used - Excellent', price: 850, seller: 'Demo Auto Recyclers', location: 'Melbourne, Australia', stock: 1 },
-  { id: 2, title: 'Front Bumper Bar', vehicle: '2020 Ford Ranger PX3', condition: 'Used - Good', price: 620, seller: 'Global Parts Demo', location: 'Sydney, Australia', stock: 2 },
-  { id: 3, title: 'LED Headlamp - LH', vehicle: '2022 Mazda CX-5', condition: 'Refurbished', price: 540, seller: 'Metro Auto Parts', location: 'Brisbane, Australia', stock: 1 }
-]
+const supabase=useSupabaseClient(); const route=useRoute(); const filters=reactive({keyword:String(route.query.part||''),year:String(route.query.year||''),make:String(route.query.make||''),model:String(route.query.model||''),condition:'',country:''}); const listings=ref<any[]>([]); const loading=ref(false); const errorMessage=ref('')
+const search=async()=>{loading.value=true;errorMessage.value='';try{let q=supabase.from('parts').select('id,title,vehicle_year,vehicle_make,vehicle_model,vehicle_variant,condition,price,currency,city,state_region,country_code,quantity,oem_number,companies!parts_seller_company_id_fkey(name,logo_url),part_images(image_url,sort_order)').eq('status','active').gt('quantity',0).order('created_at',{ascending:false}); if(filters.keyword) q=q.or(`title.ilike.%${filters.keyword}%,oem_number.ilike.%${filters.keyword}%,description.ilike.%${filters.keyword}%`); if(filters.year)q=q.eq('vehicle_year',Number(filters.year)); if(filters.make)q=q.ilike('vehicle_make',`%${filters.make}%`); if(filters.model)q=q.ilike('vehicle_model',`%${filters.model}%`); if(filters.condition)q=q.eq('condition',filters.condition); if(filters.country)q=q.ilike('country_code',`%${filters.country}%`); const {data,error}=await q.limit(100);if(error)throw error;listings.value=data||[]}catch(e:any){errorMessage.value=e.message||'Unable to search parts.'}finally{loading.value=false}}
+onMounted(search); const vehicle=(p:any)=>[p.vehicle_year,p.vehicle_make,p.vehicle_model,p.vehicle_variant].filter(Boolean).join(' '); const firstImage=(p:any)=>[...(p.part_images||[])].sort((a:any,b:any)=>a.sort_order-b.sort_order)[0]?.image_url
 </script>
-
-<template>
-  <section class="section">
-    <div class="container">
-      <div class="kicker">Marketplace search</div><h1 class="page-title" style="margin-top:8px;">Find a Part</h1>
-      <div class="card" style="padding:20px;margin-top:22px;">
-        <div class="grid grid-3">
-          <div><label class="label">Keyword / Part Number</label><input v-model="filters.keyword" class="input" placeholder="Door, bumper, 67002-0K151"></div>
-          <div><label class="label">Year</label><input v-model="filters.year" class="input" placeholder="2021"></div>
-          <div><label class="label">Make</label><input v-model="filters.make" class="input" placeholder="Toyota"></div>
-          <div><label class="label">Model</label><input v-model="filters.model" class="input" placeholder="Hilux"></div>
-          <div><label class="label">Condition</label><select v-model="filters.condition" class="select"><option value="">Any</option><option>New</option><option>Used</option><option>Refurbished</option><option>Aftermarket</option></select></div>
-          <div><label class="label">Country</label><input v-model="filters.country" class="input" placeholder="Australia"></div>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;gap:15px;flex-wrap:wrap;"><strong>{{ listings.length }} demo matches</strong><NuxtLink to="/repairer/wanted/new" class="btn btn-secondary">Can't find it? Create Wanted Request</NuxtLink></div>
-      <div class="grid grid-3">
-        <NuxtLink v-for="item in listings" :key="item.id" :to="`/listings/${item.id}`" class="card" style="overflow:hidden;">
-          <div style="height:180px;background:linear-gradient(135deg,#132a45,#091728);display:grid;place-items:center;color:#68809b;font-size:50px;">◫</div>
-          <div style="padding:18px;"><div class="badge">{{ item.condition }}</div><h3>{{ item.title }}</h3><div class="muted">{{ item.vehicle }}</div><div style="font-size:28px;font-weight:900;margin:18px 0 8px;">${{ item.price }} AUD</div><div class="muted">{{ item.seller }} · {{ item.location }}</div></div>
-        </NuxtLink>
-      </div>
-    </div>
-  </section>
-</template>
+<template><section class="section"><div class="container"><div class="kicker">Marketplace search</div><h1 class="page-title" style="margin-top:8px;">Find a Part</h1><form class="card" style="padding:20px;margin-top:22px;" @submit.prevent="search"><div class="grid grid-3"><div><label class="label">Keyword / Part Number</label><input v-model="filters.keyword" class="input" placeholder="Door, bumper, 67002-0K151"></div><div><label class="label">Year</label><input v-model="filters.year" class="input" placeholder="2021"></div><div><label class="label">Make</label><input v-model="filters.make" class="input" placeholder="Toyota"></div><div><label class="label">Model</label><input v-model="filters.model" class="input" placeholder="Hilux"></div><div><label class="label">Condition</label><select v-model="filters.condition" class="select"><option value="">Any</option><option value="new">New</option><option value="used">Used</option><option value="refurbished">Refurbished</option><option value="aftermarket">Aftermarket</option></select></div><div><label class="label">Country code</label><input v-model="filters.country" class="input" placeholder="AU"></div></div><button class="btn btn-primary" style="margin-top:16px;">Search Parts</button></form><div v-if="errorMessage" class="notice error">{{errorMessage}}</div><div style="display:flex;justify-content:space-between;align-items:center;margin:28px 0 16px;gap:15px;flex-wrap:wrap;"><strong>{{loading?'Searching…':`${listings.length} matches`}}</strong><NuxtLink to="/repairer/wanted/new" class="btn btn-secondary">Can't find it? Create Wanted Request</NuxtLink></div><div v-if="!loading&&!listings.length" class="card empty-state"><h2>No matching parts yet</h2><p class="muted">Try a broader search or create a wanted request.</p></div><div class="grid grid-3"><NuxtLink v-for="item in listings" :key="item.id" :to="`/listings/${item.id}`" class="card" style="overflow:hidden;"><img v-if="firstImage(item)" :src="firstImage(item)" style="height:180px;width:100%;object-fit:cover;"><div v-else class="part-placeholder">◫</div><div style="padding:18px;"><div class="badge">{{item.condition}}</div><h3>{{item.title}}</h3><div class="muted">{{vehicle(item)}}</div><div style="font-size:28px;font-weight:900;margin:18px 0 8px;">{{item.price==null?'Price on request':`$${Number(item.price).toFixed(2)} ${item.currency}`}}</div><div class="muted">{{item.companies?.name||'Supplier'}} · {{[item.city,item.state_region,item.country_code].filter(Boolean).join(', ')}}</div></div></NuxtLink></div></div></section></template>
