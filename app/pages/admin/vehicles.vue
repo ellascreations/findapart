@@ -9,6 +9,49 @@ const importCount = ref(0)
 const enrichProgress = reactive({ active:false, processed:0, total:0, batch:0, batches:0, matched:0, inserted:0, updated:0, skipped:0 })
 const enrichMessage = ref('')
 const searchText = ref('')
+const unmatchedRows = ref<any[]>([])
+const unmatchedLoading = ref(false)
+const modelSearch = reactive<Record<string,string>>({})
+const modelMatches = reactive<Record<string,any[]>>({})
+
+const loadUnmatched = async () => {
+  unmatchedLoading.value = true
+  const { data, error } = await supabase
+    .from('vehicle_enrichment_unmatched')
+    .select('id,source,year,make,model,variant,reason,status,first_seen_at,last_seen_at')
+    .eq('status','pending')
+    .order('last_seen_at',{ascending:false})
+    .limit(200)
+  if (error) errorMessage.value = error.message
+  else unmatchedRows.value = data || []
+  unmatchedLoading.value = false
+}
+
+const searchModelsForUnmatched = async (item:any) => {
+  const term = (modelSearch[item.id] || item.model || '').trim()
+  if (!term) return
+  const { data, error } = await supabase
+    .from('vehicle_models')
+    .select('id,name,make_id,vehicle_makes(name)')
+    .ilike('name', `%${term}%`)
+    .limit(25)
+  if (error) errorMessage.value = error.message
+  else modelMatches[item.id] = data || []
+}
+
+const resolveUnmatched = async (item:any, action:'create_base'|'map'|'ignore', targetModelId?:number) => {
+  errorMessage.value = ''; successMessage.value = ''
+  const { data, error } = await supabase.rpc('resolve_vehicle_enrichment_unmatched', {
+    p_id: item.id, p_action: action, p_target_model_id: targetModelId || null
+  })
+  if (error) { errorMessage.value = error.message; return }
+  successMessage.value = action === 'ignore'
+    ? `${item.year || ''} ${item.make || ''} ${item.model || ''} ignored.`
+    : `${item.year || ''} ${item.make || ''} ${item.model || ''} resolved and reprocessed.`
+  delete modelMatches[item.id]; delete modelSearch[item.id]
+  await Promise.all([loadUnmatched(), load()])
+}
+
 const form = reactive({
   year:'', make:'', model:'', series:'', variant:'', model_year:'', body_type:'', engine:'', engine_code:'',
   transmission:'', fuel_type:'', drive_type:'', country_code:'AU', external_source:'manual', external_id:''
@@ -27,7 +70,7 @@ const load = async () => {
   if (error) errorMessage.value = error.message
   else rows.value = data || []
 }
-onMounted(load)
+onMounted(async () => { await Promise.all([load(), loadUnmatched()]) })
 
 const addVehicle = async () => {
   loading.value = true; errorMessage.value=''; successMessage.value=''
@@ -174,7 +217,7 @@ const importVariantEnrichment = async (event:any) => {
 
     successMessage.value = `Variant enrichment complete: ${enrichProgress.inserted} variant/spec records added, ${enrichProgress.updated} existing records updated, ${enrichProgress.skipped} unmatched/skipped.`
     enrichMessage.value = 'Complete.'
-    await load()
+    await Promise.all([load(), loadUnmatched()])
   } catch(e:any) {
     errorMessage.value = e.message || 'Unable to enrich vehicle catalogue.'
     enrichMessage.value = 'Stopped.'
@@ -259,6 +302,46 @@ const setActive = async (item:any, active:boolean) => {
         <span>Updated {{ enrichProgress.updated.toLocaleString() }}</span>
         <span>Skipped {{ enrichProgress.skipped.toLocaleString() }}</span>
       </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px;overflow:hidden;">
+    <div style="padding:20px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0 0 6px;">Unmatched Vehicle Review</h2>
+        <div class="muted">Rows skipped during enrichment are kept here until you create the missing base vehicle, map them to an existing model, or ignore them.</div>
+      </div>
+      <button class="btn btn-secondary" :disabled="unmatchedLoading" @click="loadUnmatched">{{ unmatchedLoading ? 'Refreshing…' : 'Refresh' }}</button>
+    </div>
+    <div v-if="!unmatchedRows.length" class="muted" style="padding:0 20px 20px;">No pending unmatched vehicles.</div>
+    <div v-else class="table-wrap">
+      <table>
+        <thead><tr><th>Vehicle</th><th>Variant</th><th>Reason</th><th>Map to existing model</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr v-for="item in unmatchedRows" :key="item.id">
+            <td><strong>{{ item.year || '—' }} {{ item.make || '—' }} {{ item.model || '—' }}</strong><div class="muted">{{ item.source }}</div></td>
+            <td>{{ item.variant || '—' }}</td>
+            <td><span class="badge">{{ item.reason }}</span></td>
+            <td style="min-width:260px;">
+              <div style="display:flex;gap:6px;">
+                <input v-model="modelSearch[item.id]" class="input" :placeholder="item.model || 'Search model'" @keyup.enter="searchModelsForUnmatched(item)">
+                <button class="btn btn-secondary small-btn" @click="searchModelsForUnmatched(item)">Find</button>
+              </div>
+              <div v-if="modelMatches[item.id]?.length" style="margin-top:6px;display:grid;gap:5px;">
+                <button v-for="m in modelMatches[item.id]" :key="m.id" class="btn btn-secondary small-btn" style="text-align:left;" @click="resolveUnmatched(item,'map',m.id)">
+                  {{ m.vehicle_makes?.name }} → {{ m.name }}
+                </button>
+              </div>
+            </td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-primary small-btn" @click="resolveUnmatched(item,'create_base')">Create Base + Reprocess</button>
+                <button class="btn btn-secondary small-btn" @click="resolveUnmatched(item,'ignore')">Ignore</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
