@@ -5,8 +5,10 @@ type VehicleSelection = {
   makeName: string
   modelId: number | null
   modelName: string
-  vehicleId: string | null
+  seriesId: number | null
   series: string
+  variantId: number | null
+  vehicleId: string | null
   variant: string
   bodyType: string
   engine: string
@@ -29,18 +31,21 @@ const supabase = useSupabaseClient()
 const years = ref<number[]>([])
 const makes = ref<any[]>([])
 const models = ref<any[]>([])
+const seriesOptions = ref<any[]>([])
 const variants = ref<any[]>([])
 const year = ref<number | null>(null)
 const makeId = ref<number | null>(null)
 const modelId = ref<number | null>(null)
+const seriesId = ref<number | null>(null)
 const vehicleId = ref<string | null>(isValidUuid(props.modelValue) ? props.modelValue : null)
 const loading = ref(false)
 const hydrating = ref(false)
 
 const selectedMake = computed(() => makes.value.find(x => Number(x.id) === Number(makeId.value)))
 const selectedModel = computed(() => models.value.find(x => Number(x.id) === Number(modelId.value)))
+const selectedSeries = computed(() => seriesOptions.value.find(x => Number(x.id) === Number(seriesId.value)))
 const selectedVariant = computed(() => variants.value.find(x => x.id === vehicleId.value))
-const variantLabel = (v:any) => [v.series, v.variant, v.body_type, v.engine, v.transmission].filter(Boolean).join(' · ') || 'Standard / unspecified'
+const variantLabel = (v:any) => [v.variant, v.body_type, v.engine, v.transmission, v.fuel_type].filter(Boolean).join(' · ') || 'Standard / unspecified'
 
 const currentSelection = (): VehicleSelection => ({
   year: year.value,
@@ -48,8 +53,10 @@ const currentSelection = (): VehicleSelection => ({
   makeName: selectedMake.value?.name || '',
   modelId: modelId.value,
   modelName: selectedModel.value?.name || '',
+  seriesId: seriesId.value,
+  series: selectedSeries.value?.name || selectedVariant.value?.series || '',
+  variantId: selectedVariant.value?.variant_id || null,
   vehicleId: vehicleId.value,
-  series: selectedVariant.value?.series || '',
   variant: selectedVariant.value?.variant || '',
   bodyType: selectedVariant.value?.body_type || '',
   engine: selectedVariant.value?.engine || '',
@@ -68,8 +75,8 @@ const loadYears = async () => {
 }
 
 const loadMakes = async () => {
-  makes.value = []; models.value = []; variants.value = []
-  makeId.value = null; modelId.value = null; vehicleId.value = null
+  makes.value = []; models.value = []; seriesOptions.value = []; variants.value = []
+  makeId.value = null; modelId.value = null; seriesId.value = null; vehicleId.value = null
   if (!year.value) { notify(); return }
   const { data } = await supabase.rpc('vehicle_make_options', { selected_year: year.value })
   makes.value = data || []
@@ -77,18 +84,34 @@ const loadMakes = async () => {
 }
 
 const loadModels = async () => {
-  models.value = []; variants.value = []
-  modelId.value = null; vehicleId.value = null
+  models.value = []; seriesOptions.value = []; variants.value = []
+  modelId.value = null; seriesId.value = null; vehicleId.value = null
   if (!year.value || !makeId.value) { notify(); return }
   const { data } = await supabase.rpc('vehicle_model_options', { selected_year: year.value, selected_make_id: makeId.value })
   models.value = data || []
   notify()
 }
 
+const loadSeries = async () => {
+  seriesOptions.value = []; variants.value = []
+  seriesId.value = null; vehicleId.value = null
+  if (!year.value || !modelId.value) { notify(); return }
+  const { data } = await supabase.rpc('vehicle_series_options', { selected_year: year.value, selected_model_id: modelId.value })
+  seriesOptions.value = data || []
+  if (seriesOptions.value.length === 1) {
+    seriesId.value = Number(seriesOptions.value[0].id)
+    await loadVariants()
+  } else notify()
+}
+
 const loadVariants = async () => {
   variants.value = []; vehicleId.value = null
   if (!year.value || !modelId.value) { notify(); return }
-  const { data } = await supabase.rpc('vehicle_variant_options', { selected_year: year.value, selected_model_id: modelId.value })
+  const { data } = await supabase.rpc('vehicle_variant_options', {
+    selected_year: year.value,
+    selected_model_id: modelId.value,
+    selected_series_id: seriesId.value
+  })
   variants.value = data || []
   if (variants.value.length === 1 && !props.allowPartial) vehicleId.value = variants.value[0].id
   notify()
@@ -104,7 +127,7 @@ const hydrate = async (id:string) => {
   try {
     const { data } = await supabase
       .from('vehicles')
-      .select('id,year,make_id,model_id,series,variant,body_type,engine,transmission,fuel_type,vehicle_makes(name),vehicle_models(name)')
+      .select('id,year,make_id,model_id,series_id,series,variant,body_type,engine,transmission,fuel_type,vehicle_makes(name),vehicle_models(name),vehicle_series(name)')
       .eq('id', id)
       .maybeSingle()
     if (!data) return
@@ -113,7 +136,10 @@ const hydrate = async (id:string) => {
     makeId.value = data.make_id
     await loadModels()
     modelId.value = data.model_id
-    const { data: vs } = await supabase.rpc('vehicle_variant_options', { selected_year: data.year, selected_model_id: data.model_id })
+    const { data: ss } = await supabase.rpc('vehicle_series_options', { selected_year: data.year, selected_model_id: data.model_id })
+    seriesOptions.value = ss || []
+    seriesId.value = data.series_id || seriesOptions.value.find((x:any) => x.name === data.series)?.id || null
+    const { data: vs } = await supabase.rpc('vehicle_variant_options', { selected_year: data.year, selected_model_id: data.model_id, selected_series_id: seriesId.value })
     variants.value = vs || []
     vehicleId.value = data.id
     notify()
@@ -156,20 +182,27 @@ watch(() => props.modelValue, async (value) => {
       </div>
       <div>
         <label class="label">Model</label>
-        <select v-model="modelId" class="select" :disabled="!makeId" :required="required" @change="loadVariants">
+        <select v-model="modelId" class="select" :disabled="!makeId" :required="required" @change="loadSeries">
           <option :value="null">Select model</option>
           <option v-for="item in models" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
       </div>
       <div>
-        <label class="label">Series / Variant / Body / Engine</label>
+        <label class="label">Series / Generation</label>
+        <select v-model="seriesId" class="select" :disabled="!modelId" @change="loadVariants">
+          <option :value="null">{{ allowPartial ? 'Any series' : 'Select series' }}</option>
+          <option v-for="item in seriesOptions" :key="item.id" :value="item.id">{{ item.name }}</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="label">Badge / Variant</label>
         <select v-model="vehicleId" class="select" :disabled="!modelId" :required="required && !allowPartial" @change="notify">
-          <option :value="null">{{ allowPartial ? 'Any variant' : 'Select vehicle variant' }}</option>
+          <option :value="null">{{ allowPartial ? 'Any badge / variant' : 'Select badge / variant' }}</option>
           <option v-for="item in variants" :key="item.id" :value="item.id">{{ variantLabel(item) }}</option>
         </select>
       </div>
     </div>
-    <div v-if="year && makeId && modelId && !variants.length" class="notice" style="margin-bottom:0;">
+    <div v-if="year && makeId && modelId && !variants.length && (seriesId || !seriesOptions.length)" class="notice" style="margin-bottom:0;">
       No variants are loaded for this vehicle yet. An administrator can add or import it from the Vehicle Catalogue.
     </div>
   </div>
