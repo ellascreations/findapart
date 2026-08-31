@@ -1,51 +1,55 @@
 <script setup lang="ts">
 const route = useRoute()
-const { profile, loadProfile } = useProfile()
+const { profile, company, loadProfile } = useProfile()
 
 onMounted(loadProfile)
 
 const role = computed(() => profile.value?.role || '')
+const isAdmin = computed(() => ['admin', 'superadmin'].includes(role.value))
+const companyType = computed(() => company.value?.type || '')
+
+const adminItems = [
+  { to: '/admin', label: 'Dashboard', icon: '⌂' },
+  { to: '/admin/users', label: 'Users', icon: '◉' },
+  { to: '/admin/companies', label: 'Companies', icon: '▣' },
+  { to: '/admin/listings', label: 'Listings', icon: '▦' },
+  { to: '/admin/wanted', label: 'Wanted', icon: '◎' },
+  { to: '/admin/vehicles', label: 'Vehicles', icon: '◇' },
+  { to: '/admin/audit', label: 'Audit', icon: '≡' },
+]
+
+const repairerItems = [
+  { to: '/repairer/dashboard', label: 'Dashboard', icon: '⌂' },
+  { to: '/search', label: 'Find Parts', icon: '⌕' },
+  { to: '/repairer/wanted', label: 'Wanted Parts', icon: '◎' },
+  { to: '/repairer/wanted/new', label: 'New Request', icon: '+' },
+  { to: '/account/company', label: 'Company', icon: '▣' },
+]
+
+const supplierItems = [
+  { to: '/supplier/dashboard', label: 'Dashboard', icon: '⌂' },
+  { to: '/supplier/parts', label: 'My Parts', icon: '▦' },
+  { to: '/supplier/parts/new', label: 'Add Part', icon: '+' },
+  { to: '/supplier/wanted', label: 'Wanted Requests', icon: '◎' },
+  { to: '/account/company', label: 'Company', icon: '▣' },
+]
 
 const items = computed(() => {
-  if (role.value === 'repairer') {
-    return [
-      { to: '/repairer/dashboard', label: 'Dashboard', icon: '⌂' },
-      { to: '/search', label: 'Find Parts', icon: '⌕' },
-      { to: '/repairer/wanted', label: 'Wanted Parts', icon: '◎' },
-      { to: '/repairer/wanted/new', label: 'New Request', icon: '+' },
-      { to: '/account/company', label: 'Company', icon: '▣' },
-    ]
-  }
+  // The current area decides which navigation is shown.
+  if (route.path.startsWith('/admin')) return isAdmin.value ? adminItems : []
+  if (route.path.startsWith('/repairer')) return companyType.value === 'repairer' ? repairerItems : []
+  if (route.path.startsWith('/supplier')) return companyType.value === 'supplier' ? supplierItems : []
 
-  if (role.value === 'supplier') {
-    return [
-      { to: '/supplier/dashboard', label: 'Dashboard', icon: '⌂' },
-      { to: '/supplier/parts', label: 'My Parts', icon: '▦' },
-      { to: '/supplier/parts/new', label: 'Add Part', icon: '+' },
-      { to: '/supplier/wanted', label: 'Wanted Requests', icon: '◎' },
-      { to: '/account/company', label: 'Company', icon: '▣' },
-    ]
-  }
-
-  if (['admin', 'superadmin'].includes(role.value)) {
-    return [
-      { to: '/admin', label: 'Dashboard', icon: '⌂' },
-      { to: '/admin/users', label: 'Users', icon: '◉' },
-      { to: '/admin/companies', label: 'Companies', icon: '▣' },
-      { to: '/admin/listings', label: 'Listings', icon: '▦' },
-      { to: '/admin/wanted', label: 'Wanted', icon: '◎' },
-      { to: '/admin/vehicles', label: 'Vehicles', icon: '◇' },
-      { to: '/admin/audit', label: 'Audit', icon: '≡' },
-    ]
+  // Company profile belongs to the marketplace company, not the admin role.
+  if (route.path.startsWith('/account')) {
+    if (companyType.value === 'repairer') return repairerItems
+    if (companyType.value === 'supplier') return supplierItems
   }
 
   return []
 })
 
-const show = computed(() => {
-  if (!items.value.length) return false
-  return route.path.startsWith('/repairer') || route.path.startsWith('/supplier') || route.path.startsWith('/admin') || route.path.startsWith('/account')
-})
+const show = computed(() => items.value.length > 0)
 
 const active = (to: string) => {
   if (to === '/admin' || to.endsWith('/dashboard')) return route.path === to

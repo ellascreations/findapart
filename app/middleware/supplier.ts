@@ -29,10 +29,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/login?status=suspended')
   }
 
-  if (error || !profile || !['supplier', 'admin', 'superadmin'].includes(profile.role)) {
+  const company = (profile as any)?.companies || null
+
+  // Marketplace access is controlled by company type, not admin role.
+  if (error || !profile || company?.type !== 'supplier') {
     return navigateTo('/')
   }
 
   useState<any | null>('current-profile', () => null).value = profile
-  useState<any | null>('current-company', () => null).value = (profile as any).companies || null
+  useState<any | null>('current-company', () => null).value = company
 })
