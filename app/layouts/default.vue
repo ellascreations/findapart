@@ -5,7 +5,10 @@
     <main><slot /></main>
     <footer class="section site-footer">
       <div class="container footer-inner">
-        <div><strong>Find a Part</strong><div class="muted">Every Part. Everywhere.</div></div>
+        <div class="footer-brand">
+          <img src="/brand/find-a-part-mark.webp" alt="" class="footer-logo-mark">
+          <div><strong>FIND <span>A</span> PART</strong><div class="muted">Parts. People. Solutions.</div></div>
+        </div>
         <div class="muted">Global automotive parts marketplace</div>
       </div>
     </footer>

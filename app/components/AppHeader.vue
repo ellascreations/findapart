@@ -32,9 +32,12 @@ const logout = async () => {
 <template>
   <header class="site-header">
     <div class="container site-header-inner">
-      <NuxtLink to="/" class="brand-link">
-        <span class="brand-mark">F</span>
-        <span class="brand-copy"><strong>FIND A PART</strong><small>Every Part. Everywhere.</small></span>
+      <NuxtLink to="/" class="brand-link" aria-label="Find a Part home">
+        <img src="/brand/find-a-part-mark.webp" alt="" class="brand-logo-mark">
+        <span class="brand-copy">
+          <strong>FIND <span>A</span> PART</strong>
+          <small>Parts. People. Solutions.</small>
+        </span>
       </NuxtLink>
 
       <nav class="site-nav">
