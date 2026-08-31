@@ -20,9 +20,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id,role,company_id,companies(*)')
+    .select('id,role,account_status,company_id,companies(*)')
     .eq('id', userId)
     .maybeSingle()
+
+  if (!error && profile?.account_status === 'suspended') {
+    await supabase.auth.signOut()
+    return navigateTo('/login?status=suspended')
+  }
 
   if (error || !profile || !['supplier', 'admin', 'superadmin'].includes(profile.role)) {
     return navigateTo('/')

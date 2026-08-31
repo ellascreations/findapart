@@ -1,19 +1,36 @@
 <script setup lang="ts">
 definePageMeta({ middleware: ['admin'] })
 const supabase = useSupabaseClient()
-const stats = reactive({ suppliers:0, repairers:0, parts:0, vehicles:0 })
 const loading = ref(true)
+const stats = reactive({ users:0, companies:0, pending:0, parts:0, wanted:0, vehicles:0 })
 const loadStats = async () => {
   loading.value = true
-  const [suppliers, repairers, parts, vehicles] = await Promise.all([
-    supabase.from('profiles').select('*',{count:'exact',head:true}).eq('role','supplier'),
-    supabase.from('profiles').select('*',{count:'exact',head:true}).eq('role','repairer'),
-    supabase.from('parts').select('*',{count:'exact',head:true}).eq('status','active'),
-    supabase.from('vehicles').select('*',{count:'exact',head:true}).eq('active',true)
+  const [users, companies, pending, parts, wanted, vehicles] = await Promise.all([
+    supabase.from('profiles').select('*',{count:'exact',head:true}),
+    supabase.from('companies').select('*',{count:'exact',head:true}),
+    supabase.from('companies').select('*',{count:'exact',head:true}).eq('approved',false),
+    supabase.from('parts').select('*',{count:'exact',head:true}),
+    supabase.from('wanted_requests').select('*',{count:'exact',head:true}).eq('status','open'),
+    supabase.from('vehicles').select('*',{count:'exact',head:true}).eq('active',true),
   ])
-  stats.suppliers=suppliers.count||0; stats.repairers=repairers.count||0; stats.parts=parts.count||0; stats.vehicles=vehicles.count||0
+  stats.users=users.count||0; stats.companies=companies.count||0; stats.pending=pending.count||0
+  stats.parts=parts.count||0; stats.wanted=wanted.count||0; stats.vehicles=vehicles.count||0
   loading.value=false
 }
 onMounted(loadStats)
 </script>
-<template><section class="section"><div class="container"><div class="kicker">Find a Part administration</div><h1 class="page-title" style="margin-top:8px;">Admin Dashboard</h1><div class="grid grid-4" style="margin-top:24px;"><div class="card stat"><strong>{{loading?'—':stats.suppliers}}</strong><span class="muted">Suppliers</span></div><div class="card stat"><strong>{{loading?'—':stats.repairers}}</strong><span class="muted">Repairers</span></div><div class="card stat"><strong>{{loading?'—':stats.parts}}</strong><span class="muted">Active parts</span></div><div class="card stat"><strong>{{loading?'—':stats.vehicles}}</strong><span class="muted">Vehicle records</span></div></div><div class="grid grid-3" style="margin-top:22px;"><div class="card" style="padding:22px;"><h3>Company approvals</h3><p class="muted">Approve or reject supplier and repairer businesses.</p><button class="btn btn-secondary" disabled>Coming in Admin stage</button></div><div class="card" style="padding:22px;"><h3>Listings</h3><p class="muted">Review marketplace listings and reported parts.</p><button class="btn btn-secondary" disabled>Coming in Admin stage</button></div><div class="card" style="padding:22px;"><h3>Users</h3><p class="muted">Manage account roles, access and marketplace status.</p><button class="btn btn-secondary" disabled>Coming in Admin stage</button></div><div class="card" style="padding:22px;"><h3>Vehicle Catalogue</h3><p class="muted">Manage years, makes, models, variants, body styles and engines used across Find a Part.</p><NuxtLink to="/admin/vehicles" class="btn btn-secondary">Manage Vehicles</NuxtLink></div></div></div></section></template>
+<template>
+<section class="section"><div class="container">
+  <div class="kicker">Find a Part administration</div>
+  <h1 class="page-title" style="margin-top:8px;">Control Centre</h1>
+  <p class="muted">Manage users, companies, listings, wanted requests and the vehicle catalogue.</p>
+  <div class="grid grid-3" style="margin-top:24px;">
+    <NuxtLink to="/admin/users" class="card stat"><strong>{{loading?'—':stats.users}}</strong><span class="muted">Users</span></NuxtLink>
+    <NuxtLink to="/admin/companies" class="card stat"><strong>{{loading?'—':stats.companies}}</strong><span class="muted">Companies · {{stats.pending}} pending</span></NuxtLink>
+    <NuxtLink to="/admin/listings" class="card stat"><strong>{{loading?'—':stats.parts}}</strong><span class="muted">Part listings</span></NuxtLink>
+    <NuxtLink to="/admin/wanted" class="card stat"><strong>{{loading?'—':stats.wanted}}</strong><span class="muted">Open wanted requests</span></NuxtLink>
+    <NuxtLink to="/admin/vehicles" class="card stat"><strong>{{loading?'—':stats.vehicles}}</strong><span class="muted">Vehicle records</span></NuxtLink>
+    <NuxtLink to="/admin/audit" class="card stat"><strong>Audit</strong><span class="muted">Administration activity log</span></NuxtLink>
+  </div>
+</div></section>
+</template>

@@ -1,12 +1,7 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  // The Supabase browser session is restored client-side. Avoid rejecting a
-  // valid user during Netlify SSR; validate once the route is running client-side.
   if (import.meta.server) return
-
   const supabase = useSupabaseClient()
-
   let { data: userData, error: userError } = await supabase.auth.getUser()
-
   if (userError || !isValidUuid(userData.user?.id)) {
     const { error: refreshError } = await supabase.auth.refreshSession()
     if (!refreshError) {
@@ -15,11 +10,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
       userError = retry.error
     }
   }
-
-  if (userError || !isValidUuid(userData.user?.id)) {
-    return navigateTo({
-      path: '/login',
-      query: { redirect: to.fullPath },
-    })
+  const userId = userData.user?.id
+  if (userError || !isValidUuid(userId)) return navigateTo({ path:'/login', query:{ redirect:to.fullPath } })
+  const { data: profile } = await supabase.from('profiles').select('account_status').eq('id',userId).maybeSingle()
+  if (profile?.account_status === 'suspended') {
+    await supabase.auth.signOut()
+    return navigateTo('/login?status=suspended')
   }
 })

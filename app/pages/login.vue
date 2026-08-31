@@ -22,7 +22,7 @@ const login = async () => {
 
     const { data: profileRow, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, account_status')
       .eq('id', data.user.id)
       .maybeSingle()
 
@@ -30,6 +30,12 @@ const login = async () => {
 
     if (!profileRow) {
       errorMessage.value = 'Your login is valid, but your Find a Part profile is missing. Run migration 003_repair_existing_accounts.sql in Supabase, then sign in again.'
+      await supabase.auth.signOut()
+      return
+    }
+
+    if (profileRow.account_status === 'suspended') {
+      errorMessage.value = 'Your Find a Part account has been suspended. Please contact an administrator.'
       await supabase.auth.signOut()
       return
     }
@@ -67,6 +73,8 @@ const login = async () => {
       <form class="card" style="padding:26px;" @submit.prevent="login">
         <div class="kicker">Welcome back</div>
         <h1>Sign in to Find a Part</h1>
+
+        <div v-if="route.query.status === 'suspended'" class="notice error">Your Find a Part account has been suspended. Please contact an administrator.</div>
 
         <div v-if="route.query.confirmed" class="notice success">
           Your email has been confirmed. You can sign in now.
