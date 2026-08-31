@@ -9,8 +9,8 @@ watch(user, async v => {
 }, { immediate:true })
 const nav = computed(()=>{
   const items:any[]=[{to:'/search',label:'Find Parts'}]
-  if (profile.value?.role === 'repairer') items.push({to:'/repairer/dashboard',label:'Repairer'})
-  if (profile.value?.role === 'supplier') items.push({to:'/supplier/dashboard',label:'Supplier'})
+  if (profile.value?.role === 'repairer') { items.push({to:'/repairer/dashboard',label:'Repairer'}); items.push({to:'/repairer/wanted',label:'Wanted Parts'}) }
+  if (profile.value?.role === 'supplier') { items.push({to:'/supplier/dashboard',label:'Supplier'}); items.push({to:'/supplier/wanted',label:'Wanted Requests'}) }
   if (['admin','superadmin'].includes(profile.value?.role)) items.push({to:'/admin',label:'Admin'})
   return items
 })
