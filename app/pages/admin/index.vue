@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ middleware: ['auth','admin'] })
+definePageMeta({ middleware: ['admin'] })
 const supabase = useSupabaseClient()
 const stats = reactive({ suppliers:0, repairers:0, parts:0, vehicles:0 })
 const loading = ref(true)

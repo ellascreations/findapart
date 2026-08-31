@@ -1,11 +1,30 @@
-export default defineNuxtRouteMiddleware(async () => {
-  const user = useSupabaseUser()
-  if (!user.value?.id || !isValidUuid(user.value.id)) return navigateTo('/login')
+export default defineNuxtRouteMiddleware(async (to) => {
+  if (import.meta.server) return
 
-  const { profile, loadProfile } = useProfile()
-  if (!profile.value) await loadProfile()
+  const supabase = useSupabaseClient()
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  let session = sessionData.session
 
-  if (profile.value?.role !== 'supplier' && !['admin', 'superadmin'].includes(profile.value?.role)) {
-    return navigateTo('/repairer/dashboard')
+  if (!session && !sessionError) {
+    const { data: refreshData } = await supabase.auth.refreshSession()
+    session = refreshData.session
   }
+
+  const userId = session?.user?.id
+  if (!isValidUuid(userId)) {
+    return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
+  }
+
+  const { data: profileRow, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role, company_id, companies(*)')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error || !profileRow || !['supplier', 'admin', 'superadmin'].includes(profileRow.role)) {
+    return navigateTo('/')
+  }
+
+  useState<any | null>('current-profile', () => null).value = profileRow
+  useState<any | null>('current-company', () => null).value = (profileRow as any)?.companies || null
 })

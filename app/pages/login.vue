@@ -34,6 +34,16 @@ const login = async () => {
       return
     }
 
+    const requestedRedirect = typeof route.query.redirect === 'string'
+      && route.query.redirect.startsWith('/')
+      && !route.query.redirect.startsWith('//')
+        ? route.query.redirect
+        : ''
+
+    if (requestedRedirect) {
+      return navigateTo(requestedRedirect)
+    }
+
     if (profileRow.role === 'supplier') {
       return navigateTo('/supplier/dashboard')
     }
