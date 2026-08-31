@@ -54,6 +54,10 @@ const login = async () => {
       return navigateTo('/supplier/dashboard')
     }
 
+    if (profileRow.role === 'consumer') {
+      return navigateTo('/consumer/dashboard')
+    }
+
     if (profileRow.role === 'admin' || profileRow.role === 'superadmin') {
       return navigateTo('/admin')
     }

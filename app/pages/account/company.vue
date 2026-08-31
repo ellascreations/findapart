@@ -3,9 +3,9 @@ definePageMeta({middleware:['auth']})
 const supabase=useSupabaseClient(); const {company,profile,loadProfile,resolveAuthenticatedUser}=useProfile()
 const form=reactive<any>({name:'',abn:'',email:'',phone:'',website:'',address_line1:'',address_line2:'',city:'',state_region:'',postcode:'',country_code:'AU',logo_url:''})
 const loading=ref(false), message=ref(''), errorMessage=ref(''); const logoFile=ref<File|null>(null)
-onMounted(async()=>{await loadProfile(); Object.assign(form,company.value||{})})
+onMounted(async()=>{await loadProfile(); if(profile.value?.role==='consumer') return navigateTo('/consumer/dashboard'); Object.assign(form,company.value||{})})
 const onLogo=(e:any)=>logoFile.value=e.target.files?.[0]||null
-const save=async()=>{loading.value=true;message.value='';errorMessage.value='';try{
+const save=async()=>{if(profile.value?.role==='consumer'){return navigateTo('/consumer/dashboard')} loading.value=true;message.value='';errorMessage.value='';try{
  const authUser=await resolveAuthenticatedUser()
  const userId=authUser?.id
  if(!isValidUuid(userId)) throw new Error('Unable to verify your signed-in session. Please reload the page and try again.')

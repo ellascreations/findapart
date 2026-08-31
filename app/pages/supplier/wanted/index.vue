@@ -18,7 +18,7 @@ const vehicleLabel=(v:any)=>v?[v.year,v.make,v.model,v.series,v.variant].filter(
 
 <template>
 <section class="section"><div class="container">
-  <div class="dashboard-head"><div><div class="kicker">Supplier portal</div><h1 class="page-title">Wanted Requests</h1><p class="muted">Find repairers who need parts you have in stock.</p></div><NuxtLink class="btn btn-secondary" to="/supplier/parts">My Inventory</NuxtLink></div>
+  <div class="dashboard-head"><div><div class="kicker">Supplier portal</div><h1 class="page-title">Wanted Requests</h1><p class="muted">Find repairers and private restorers who need parts you have in stock.</p></div><NuxtLink class="btn btn-secondary" to="/supplier/parts">My Inventory</NuxtLink></div>
   <div class="card" style="padding:16px;margin-top:20px;display:flex;gap:10px"><input v-model="q" class="input" placeholder="Search part name" @keyup.enter="load"><button class="btn btn-primary" @click="load">Search Requests</button></div>
   <div v-if="loading" class="card empty-state">Loading requests…</div>
   <div v-else-if="!rows.length" class="card empty-state"><h2>No open requests match</h2><p class="muted">Try another search or check again later.</p></div>
@@ -31,7 +31,7 @@ const vehicleLabel=(v:any)=>v?[v.year,v.make,v.model,v.series,v.variant].filter(
           <span class="badge" v-if="r.oem_number">OEM {{r.oem_number}}</span>
           <span class="badge">{{r.preferred_colour||'Any colour'}}</span>
           <span class="badge">{{r.condition_notes||'Any condition'}}</span>
-          <span class="badge" v-if="r.delivery_city || r.delivery_state_region">Deliver to {{[r.delivery_city,r.delivery_state_region].filter(Boolean).join(', ')}}</span>
+          <span class="badge">{{r.companies?.name||r.requester_name||'Private Restorer'}}</span><span class="badge" v-if="r.delivery_city || r.delivery_state_region">Deliver to {{[r.delivery_city,r.delivery_state_region].filter(Boolean).join(', ')}}</span>
         </div>
       </div>
       <div style="text-align:right"><div class="btn btn-primary">View & Offer →</div></div>

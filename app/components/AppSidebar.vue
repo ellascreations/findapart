@@ -78,6 +78,13 @@ const repairerItems = [
   { to: '/account/company', label: 'Company Profile', icon: '▣' },
 ]
 
+const consumerItems = [
+  { to: '/consumer/dashboard', label: 'Dashboard', icon: '⌂' },
+  { to: '/search', label: 'Find Parts', icon: '⌕' },
+  { to: '/consumer/wanted', label: 'My Wanted Parts', icon: '◎' },
+  { to: '/consumer/wanted/new', label: 'New Wanted Request', icon: '+' },
+]
+
 const supplierItems = [
   { to: '/supplier/dashboard', label: 'Dashboard', icon: '⌂' },
   { to: '/supplier/parts', label: 'My Parts', icon: '▦' },
@@ -133,6 +140,20 @@ const logout = async () => {
         <div class="sidebar-section-title">Find a Part</div>
         <NuxtLink
           v-for="item in publicItems"
+          :key="item.to"
+          :to="item.to"
+          class="sidebar-link"
+          :class="{ active: active(item.to) }"
+        >
+          <span class="sidebar-icon">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </NuxtLink>
+      </nav>
+
+      <nav v-if="role === 'consumer'" class="sidebar-section">
+        <div class="sidebar-section-title">Private Owner</div>
+        <NuxtLink
+          v-for="item in consumerItems"
           :key="item.to"
           :to="item.to"
           class="sidebar-link"
