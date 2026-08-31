@@ -11,6 +11,7 @@ const enrichMessage = ref('')
 const searchText = ref('')
 const unmatchedRows = ref<any[]>([])
 const unmatchedLoading = ref(false)
+const resolvingUnmatched = reactive<Record<string,boolean>>({})
 const modelSearch = reactive<Record<string,string>>({})
 const modelMatches = reactive<Record<string,any[]>>({})
 
@@ -41,15 +42,24 @@ const searchModelsForUnmatched = async (item:any) => {
 
 const resolveUnmatched = async (item:any, action:'create_base'|'map'|'ignore', targetModelId?:number) => {
   errorMessage.value = ''; successMessage.value = ''
-  const { data, error } = await supabase.rpc('resolve_vehicle_enrichment_unmatched', {
-    p_id: item.id, p_action: action, p_target_model_id: targetModelId || null
-  })
-  if (error) { errorMessage.value = error.message; return }
-  successMessage.value = action === 'ignore'
-    ? `${item.year || ''} ${item.make || ''} ${item.model || ''} ignored.`
-    : `${item.year || ''} ${item.make || ''} ${item.model || ''} resolved and reprocessed.`
-  delete modelMatches[item.id]; delete modelSearch[item.id]
-  await Promise.all([loadUnmatched(), load()])
+  resolvingUnmatched[item.id] = true
+  try {
+    const { data, error } = await supabase.rpc('resolve_vehicle_enrichment_unmatched', {
+      p_id: item.id, p_action: action, p_target_model_id: targetModelId || null
+    })
+    if (error) {
+      const details = [error.message, error.code ? `(${error.code})` : '', error.details || '', error.hint || ''].filter(Boolean).join(' · ')
+      errorMessage.value = `Unable to resolve ${item.year || ''} ${item.make || ''} ${item.model || ''}: ${details}`
+      return
+    }
+    successMessage.value = action === 'ignore'
+      ? `${item.year || ''} ${item.make || ''} ${item.model || ''} ignored.`
+      : `${item.year || ''} ${item.make || ''} ${item.model || ''} resolved and reprocessed successfully.`
+    delete modelMatches[item.id]; delete modelSearch[item.id]
+    await Promise.all([loadUnmatched(), load()])
+  } finally {
+    resolvingUnmatched[item.id] = false
+  }
 }
 
 const form = reactive({
@@ -335,8 +345,8 @@ const setActive = async (item:any, active:boolean) => {
             </td>
             <td>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn btn-primary small-btn" @click="resolveUnmatched(item,'create_base')">Create Base + Reprocess</button>
-                <button class="btn btn-secondary small-btn" @click="resolveUnmatched(item,'ignore')">Ignore</button>
+                <button class="btn btn-primary small-btn" :disabled="resolvingUnmatched[item.id]" @click="resolveUnmatched(item,'create_base')">{{ resolvingUnmatched[item.id] ? 'Creating + Reprocessing…' : 'Create Base + Reprocess' }}</button>
+                <button class="btn btn-secondary small-btn" :disabled="resolvingUnmatched[item.id]" @click="resolveUnmatched(item,'ignore')">Ignore</button>
               </div>
             </td>
           </tr>
