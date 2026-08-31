@@ -13,6 +13,7 @@ const submit=async()=>{
   const userId=await resolveUserId()
   if(!isValidUuid(userId)){errorMessage.value='Your login session is not ready. Please sign out and sign in again.';return}
 
+  if(!isValidUuid(form.vehicle_id)){errorMessage.value='Please select a vehicle from the catalogue before publishing the request.';return}
   saving.value=true
   const {data,error}=await supabase.from('wanted_requests').insert({
     repairer_company_id:null,

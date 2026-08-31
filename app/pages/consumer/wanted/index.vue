@@ -12,7 +12,7 @@ const load=async()=>{
   loading.value=true
   const userId=await resolveUserId()
   if(!isValidUuid(userId)){loading.value=false;return}
-  let query=supabase.from('wanted_requests').select('*, vehicles(*), wanted_offers(id,status)').eq('created_by',userId).order('created_at',{ascending:false})
+  let query=supabase.from('wanted_requests').select('*, vehicles(*, vehicle_makes(name), vehicle_models(name)), wanted_offers(id,status)').eq('created_by',userId).order('created_at',{ascending:false})
   if(filter.value!=='all') query=query.eq('status',filter.value)
   const {data}=await query
   rows.value=data||[]
@@ -22,7 +22,7 @@ const load=async()=>{
 watch(filter,load)
 onMounted(load)
 const pendingOffers=(r:any)=>(r.wanted_offers||[]).filter((o:any)=>o.status==='pending').length
-const vehicleLabel=(v:any)=>v?[v.year,v.make,v.model,v.series,v.variant].filter(Boolean).join(' '):'Vehicle not specified'
+const vehicleLabel=(v:any)=>v?[v.year,v.vehicle_makes?.name,v.vehicle_models?.name,v.series,v.variant].filter(Boolean).join(' '):'Vehicle not specified'
 </script>
 
 <template>

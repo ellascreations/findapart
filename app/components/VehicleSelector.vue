@@ -101,6 +101,11 @@ const loadSeries = async () => {
   if (seriesOptions.value.length === 1) {
     seriesId.value = Number(seriesOptions.value[0].id)
     await loadVariants()
+  } else if (seriesOptions.value.length === 0) {
+    // Imported government catalogue rows often have Year + Make + Model only.
+    // Load the base vehicle record even when no Series/Badge data exists.
+    seriesId.value = null
+    await loadVariants()
   } else notify()
 }
 

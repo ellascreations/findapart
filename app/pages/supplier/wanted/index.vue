@@ -6,14 +6,14 @@ const loading=ref(true)
 const q=ref('')
 const load=async()=>{
   loading.value=true
-  let query=supabase.from('wanted_requests').select('*, companies(name), vehicles(*)').eq('status','open').order('created_at',{ascending:false})
+  let query=supabase.from('wanted_requests').select('*, companies(name), vehicles(*, vehicle_makes(name), vehicle_models(name))').eq('status','open').order('created_at',{ascending:false})
   if(q.value.trim()) query=query.ilike('part_name',`%${q.value.trim()}%`)
   const {data}=await query.limit(100)
   rows.value=data||[]
   loading.value=false
 }
 onMounted(load)
-const vehicleLabel=(v:any)=>v?[v.year,v.make,v.model,v.series,v.variant].filter(Boolean).join(' '):'Vehicle not specified'
+const vehicleLabel=(v:any)=>v?[v.year,v.vehicle_makes?.name,v.vehicle_models?.name,v.series,v.variant].filter(Boolean).join(' '):'Vehicle not specified'
 </script>
 
 <template>
