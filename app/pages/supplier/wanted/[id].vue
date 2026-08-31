@@ -46,27 +46,20 @@ const submit=async()=>{
     return
   }
 
-  const payload={
-    request_id:id.value,
-    supplier_company_id:company.value.id,
-    part_id:isValidUuid(form.part_id)?form.part_id:null,
-    price,
-    currency:(form.currency||'AUD').trim().toUpperCase(),
-    freight_price:freight,
-    eta_text:form.eta_text||null,
-    message:form.message||null,
-    created_by:authenticatedUserId,
-    status:'pending'
-  }
-
   submitting.value=true
   try{
-    const res=existing.value
-      ? await supabase.from('wanted_offers').update(payload).eq('id',existing.value.id).select('id').maybeSingle()
-      : await supabase.from('wanted_offers').insert(payload).select('id').maybeSingle()
+    const { data, error } = await supabase.rpc('submit_wanted_offer', {
+      p_request_id: id.value,
+      p_part_id: isValidUuid(form.part_id) ? form.part_id : null,
+      p_price: price,
+      p_currency: (form.currency || 'AUD').trim().toUpperCase(),
+      p_freight_price: freight,
+      p_eta_text: form.eta_text || null,
+      p_message: form.message || null
+    })
 
-    if(res.error){
-      errorMessage.value=res.error.message
+    if(error){
+      errorMessage.value=error.message
       return
     }
 
