@@ -96,9 +96,19 @@ const login = async () => {
           <input v-model="password" class="input" type="password" required autocomplete="current-password">
         </div>
 
-        <button class="btn btn-primary" style="width:100%;margin-top:20px;" :disabled="loading">
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <NuxtLink to="/forgot-password" style="color:var(--accent);font-weight:800;font-size:0.92rem;">
+            Forgot password?
+          </NuxtLink>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-top:16px;" :disabled="loading">
           {{ loading ? 'Signing In…' : 'Sign In' }}
         </button>
+
+        <p v-if="route.query.reset === 'success'" class="notice success" style="margin-top:16px;">
+          Your password has been updated. Sign in with your new password.
+        </p>
 
         <p class="muted" style="text-align:center;margin-bottom:0;">
           New here?
