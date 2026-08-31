@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const supabase=useSupabaseClient(); const route=useRoute()
-const filters=reactive({keyword:String(route.query.part||''),vehicle_id:(String(route.query.vehicle||'')||null) as string|null,year:null as number|null,make:'',model:'',condition:'',country:''})
+const initialVehicle = typeof route.query.vehicle === 'string' && isValidUuid(route.query.vehicle) ? route.query.vehicle : null
+const filters=reactive({keyword:typeof route.query.part === 'string' ? route.query.part : '',vehicle_id:initialVehicle as string|null,year:null as number|null,make:'',model:'',condition:'',country:''})
 const listings=ref<any[]>([]); const loading=ref(false); const errorMessage=ref('')
 const onVehicle=(v:any)=>{filters.vehicle_id=v.vehicleId;filters.year=v.year;filters.make=v.makeName;filters.model=v.modelName}
 const search=async()=>{loading.value=true;errorMessage.value='';try{

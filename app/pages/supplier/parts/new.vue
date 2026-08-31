@@ -18,11 +18,13 @@ const onVehicle=(v:any)=>{
   form.vehicle_variant=[v.series,v.variant,v.bodyType,v.engine].filter(Boolean).join(' · ')
 }
 const submit=async()=>{loading.value=true;errorMessage.value='';try{
- if(!company.value?.id) throw new Error('Complete your company profile before adding parts.')
- if(!form.vehicle_id) throw new Error('Select a vehicle from the structured vehicle catalogue.')
- const payload:any={...form,vehicle_year:form.vehicle_year?Number(form.vehicle_year):null,price:form.price?Number(form.price):null,quantity:Number(form.quantity||0),seller_company_id:company.value.id,created_by:user.value!.id}
+ const userId=user.value?.id
+ if(!isValidUuid(userId)) throw new Error('Your login session is not ready. Please sign out and sign in again.')
+ if(!isValidUuid(company.value?.id)) throw new Error('Complete your company profile before adding parts.')
+ if(!isValidUuid(form.vehicle_id)) throw new Error('Select a valid vehicle from the structured vehicle catalogue.')
+ const payload:any={...form,vehicle_year:form.vehicle_year?Number(form.vehicle_year):null,price:form.price?Number(form.price):null,quantity:Number(form.quantity||0),seller_company_id:company.value.id,created_by:userId}
  const {data:part,error}=await supabase.from('parts').insert(payload).select('id').single(); if(error) throw error
- for(let i=0;i<files.value.length;i++){const file=files.value[i]; const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'-'); const path=`${user.value!.id}/${part.id}/${Date.now()}-${i}-${safe}`; const {error:upErr}=await supabase.storage.from('part-images').upload(path,file); if(upErr) throw upErr; const url=supabase.storage.from('part-images').getPublicUrl(path).data.publicUrl; const {error:imgErr}=await supabase.from('part_images').insert({part_id:part.id,image_url:url,sort_order:i}); if(imgErr) throw imgErr}
+ for(let i=0;i<files.value.length;i++){const file=files.value[i]; const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'-'); const path=`${userId}/${part.id}/${Date.now()}-${i}-${safe}`; const {error:upErr}=await supabase.storage.from('part-images').upload(path,file); if(upErr) throw upErr; const url=supabase.storage.from('part-images').getPublicUrl(path).data.publicUrl; const {error:imgErr}=await supabase.from('part_images').insert({part_id:part.id,image_url:url,sort_order:i}); if(imgErr) throw imgErr}
  await navigateTo('/supplier/parts')
  }catch(e:any){errorMessage.value=e.message||'Unable to save listing.'}finally{loading.value=false}}
 </script>

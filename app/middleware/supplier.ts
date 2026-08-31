@@ -1,6 +1,6 @@
 export default defineNuxtRouteMiddleware(async () => {
   const user = useSupabaseUser()
-  if (!user.value) return navigateTo('/login')
+  if (!user.value?.id || !isValidUuid(user.value.id)) return navigateTo('/login')
 
   const { profile, loadProfile } = useProfile()
   if (!profile.value) await loadProfile()

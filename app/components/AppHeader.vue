@@ -3,7 +3,10 @@ const route = useRoute()
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const { profile, loadProfile, clearProfile } = useProfile()
-watch(user, async v => { if (v) await loadProfile(); else clearProfile() }, { immediate:true })
+watch(user, async v => {
+  if (v?.id && isValidUuid(v.id)) await loadProfile()
+  else clearProfile()
+}, { immediate:true })
 const nav = computed(()=>{
   const items:any[]=[{to:'/search',label:'Find Parts'}]
   if (profile.value?.role === 'repairer') items.push({to:'/repairer/dashboard',label:'Repairer'})

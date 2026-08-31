@@ -1,6 +1,11 @@
 <script setup lang="ts">
 const quick = reactive({ vehicle_id: null as string|null, part: '' })
-const submit = () => navigateTo({ path: '/search', query: { vehicle: quick.vehicle_id || undefined, part: quick.part || undefined } })
+const submit = () => {
+  const query: Record<string, string> = {}
+  if (isValidUuid(quick.vehicle_id)) query.vehicle = quick.vehicle_id
+  if (quick.part.trim()) query.part = quick.part.trim()
+  return navigateTo({ path: '/search', query })
+}
 </script>
 
 <template>

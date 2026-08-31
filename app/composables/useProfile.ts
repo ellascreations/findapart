@@ -4,26 +4,46 @@ export const useProfile = () => {
   const profile = useState<any | null>('current-profile', () => null)
   const company = useState<any | null>('current-company', () => null)
   const loading = useState<boolean>('current-profile-loading', () => false)
+  const loadError = useState<string>('current-profile-error', () => '')
+
+  const getUserId = () => {
+    const id = user.value?.id
+    return isValidUuid(id) ? id : null
+  }
 
   const loadProfile = async () => {
-    if (!user.value) {
+    const userId = getUserId()
+    if (!userId) {
       profile.value = null
       company.value = null
+      loadError.value = ''
       return null
     }
 
     loading.value = true
+    loadError.value = ''
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, role, company_id, companies(*)')
-        .eq('id', user.value.id)
+        .eq('id', userId)
         .maybeSingle()
 
-      if (error) throw error
+      if (error) {
+        loadError.value = error.message || 'Unable to load profile.'
+        profile.value = null
+        company.value = null
+        return null
+      }
+
       profile.value = data
       company.value = (data as any)?.companies || null
       return data
+    } catch (error: any) {
+      loadError.value = error?.message || 'Unable to load profile.'
+      profile.value = null
+      company.value = null
+      return null
     } finally {
       loading.value = false
     }
@@ -32,7 +52,8 @@ export const useProfile = () => {
   const clearProfile = () => {
     profile.value = null
     company.value = null
+    loadError.value = ''
   }
 
-  return { user, profile, company, loading, loadProfile, clearProfile }
+  return { user, profile, company, loading, loadError, getUserId, loadProfile, clearProfile }
 }

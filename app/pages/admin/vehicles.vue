@@ -72,6 +72,7 @@ const importCsv = async (event:any) => {
 }
 
 const setActive = async (item:any, active:boolean) => {
+  if(!isValidUuid(item?.id)){errorMessage.value='Invalid vehicle ID.';return}
   const { error } = await supabase.from('vehicles').update({active,updated_at:new Date().toISOString()}).eq('id',item.id)
   if(error) errorMessage.value=error.message; else await load()
 }

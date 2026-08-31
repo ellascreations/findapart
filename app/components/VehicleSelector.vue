@@ -33,7 +33,7 @@ const variants = ref<any[]>([])
 const year = ref<number | null>(null)
 const makeId = ref<number | null>(null)
 const modelId = ref<number | null>(null)
-const vehicleId = ref<string | null>(props.modelValue || null)
+const vehicleId = ref<string | null>(isValidUuid(props.modelValue) ? props.modelValue : null)
 const loading = ref(false)
 const hydrating = ref(false)
 
@@ -95,6 +95,11 @@ const loadVariants = async () => {
 }
 
 const hydrate = async (id:string) => {
+  if (!isValidUuid(id)) {
+    vehicleId.value = null
+    emit('update:modelValue', null)
+    return
+  }
   hydrating.value = true
   try {
     const { data } = await supabase
@@ -118,13 +123,16 @@ const hydrate = async (id:string) => {
 onMounted(async () => {
   loading.value = true
   await loadYears()
-  if (props.modelValue) await hydrate(props.modelValue)
+  if (isValidUuid(props.modelValue)) await hydrate(props.modelValue)
   loading.value = false
 })
 
 watch(() => props.modelValue, async (value) => {
-  if (value && value !== vehicleId.value && !hydrating.value) await hydrate(value)
-  if (!value && vehicleId.value && !hydrating.value) vehicleId.value = null
+  if (value && isValidUuid(value) && value !== vehicleId.value && !hydrating.value) await hydrate(value)
+  if ((!value || !isValidUuid(value)) && vehicleId.value && !hydrating.value) {
+    vehicleId.value = null
+    emit('update:modelValue', null)
+  }
 })
 </script>
 

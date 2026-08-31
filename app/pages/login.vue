@@ -18,6 +18,8 @@ const login = async () => {
 
     if (error) throw error
 
+    if (!isValidUuid(data.user?.id)) throw new Error('Supabase returned an invalid user session. Please sign out and sign in again.')
+
     const { data: profileRow, error: profileError } = await supabase
       .from('profiles')
       .select('role')
