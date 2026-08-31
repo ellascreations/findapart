@@ -53,8 +53,13 @@ onMounted(load)
               <td>{{ new Date(row.created_at).toLocaleString() }}</td>
               <td><span class="badge">{{ row.action }}</span></td>
               <td>
-                {{ row.target_type }}<br>
-                <span class="muted">{{ row.target_id }}</span>
+                <strong>{{ row.target_name || row.target_label || row.target_id || '—' }}</strong>
+                <template v-if="row.target_name && row.target_label">
+                  <br><span class="muted">{{ row.target_label }}</span>
+                </template>
+                <template v-if="row.target_name && row.target_id">
+                  <br><span class="muted">{{ row.target_type }}</span>
+                </template>
               </td>
               <td>
                 <strong>{{ row.actor_name || row.actor_email || 'System' }}</strong>
