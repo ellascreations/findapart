@@ -9,7 +9,10 @@ const register = async () => {
   try {
     const { data, error } = await supabase.auth.signUp({
       email: form.email, password: form.password,
-      options: { data: { ...form, password: undefined } }
+      options: {
+        emailRedirectTo: `${window.location.origin}/login?confirmed=1`,
+        data: { ...form, password: undefined }
+      }
     })
     if (error) throw error
     if (data.session) {
