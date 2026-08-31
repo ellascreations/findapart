@@ -1,23 +1,69 @@
 <script setup lang="ts">
 const route = useRoute()
 const supabase = useSupabaseClient()
-const user = useSupabaseUser()
 const { profile, company, loadProfile, clearProfile } = useProfile()
 
 const mobileOpen = ref(false)
+const authenticatedUser = ref<any | null>(null)
+const resolvedRole = ref('')
+const resolvedCompany = ref<any | null>(null)
 
-watch(user, async (value) => {
-  if (value?.id && isValidUuid(value.id)) await loadProfile()
-  else clearProfile()
-}, { immediate: true })
+const resolveAccount = async () => {
+  // Do not depend on useSupabaseUser() hydration for sidebar permissions.
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const authUser = userData.user
 
-onMounted(loadProfile)
-watch(() => route.fullPath, () => { mobileOpen.value = false })
+  if (userError || !isValidUuid(authUser?.id)) {
+    authenticatedUser.value = null
+    resolvedRole.value = ''
+    resolvedCompany.value = null
+    clearProfile()
+    return
+  }
 
-const role = computed(() => profile.value?.role || '')
+  authenticatedUser.value = authUser
+
+  // First allow the shared composable to populate its normal state.
+  await loadProfile()
+
+  // Then resolve directly from the database so a slow/stale reactive
+  // Supabase user cannot leave the sidebar showing public links only.
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,full_name,email,role,account_status,company_id,companies(*)')
+    .eq('id', authUser.id)
+    .maybeSingle()
+
+  if (!error && data) {
+    resolvedRole.value = data.role || ''
+    resolvedCompany.value = (data as any).companies || null
+    useState<any | null>('current-profile', () => null).value = data
+    useState<any | null>('current-company', () => null).value = (data as any).companies || null
+  } else {
+    resolvedRole.value = profile.value?.role || ''
+    resolvedCompany.value = company.value || null
+  }
+}
+
+onMounted(resolveAccount)
+watch(() => route.fullPath, async () => {
+  mobileOpen.value = false
+  await resolveAccount()
+})
+
+watch(profile, value => {
+  if (value?.role) resolvedRole.value = value.role
+}, { deep: true })
+
+watch(company, value => {
+  if (value?.id) resolvedCompany.value = value
+}, { deep: true })
+
+const role = computed(() => profile.value?.role || resolvedRole.value || '')
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(role.value))
-const companyType = computed(() => company.value?.type || '')
-const isLoggedIn = computed(() => !!user.value)
+const activeCompany = computed(() => company.value?.id ? company.value : resolvedCompany.value)
+const companyType = computed(() => activeCompany.value?.type || '')
+const isLoggedIn = computed(() => !!authenticatedUser.value)
 
 const publicItems = [
   { to: '/', label: 'Home', icon: '⌂' },
@@ -58,6 +104,9 @@ const active = (to: string) => {
 
 const logout = async () => {
   await supabase.auth.signOut()
+  authenticatedUser.value = null
+  resolvedRole.value = ''
+  resolvedCompany.value = null
   clearProfile()
   mobileOpen.value = false
   await navigateTo('/')
@@ -140,10 +189,10 @@ const logout = async () => {
     <div class="sidebar-account">
       <template v-if="isLoggedIn">
         <div class="sidebar-user">
-          <div class="sidebar-user-avatar">{{ (profile?.full_name || user?.email || 'U').charAt(0).toUpperCase() }}</div>
+          <div class="sidebar-user-avatar">{{ (profile?.full_name || authenticatedUser?.email || 'U').charAt(0).toUpperCase() }}</div>
           <div class="sidebar-user-copy">
             <strong>{{ profile?.full_name || 'Account' }}</strong>
-            <span>{{ company?.name || user?.email }}</span>
+            <span>{{ activeCompany?.name || authenticatedUser?.email }}</span>
           </div>
         </div>
         <button class="sidebar-signout" type="button" @click="logout">Sign Out</button>
