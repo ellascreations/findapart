@@ -6,7 +6,7 @@ const onVehicle=(v:any)=>{filters.vehicle_id=v.vehicleId;filters.year=v.year;fil
 const search=async()=>{loading.value=true;errorMessage.value='';try{
  let q=supabase.from('parts').select('id,title,vehicle_id,vehicle_year,vehicle_make,vehicle_model,vehicle_variant,condition,price,currency,city,state_region,country_code,quantity,oem_number,companies!parts_seller_company_id_fkey(name,logo_url),part_images(image_url,sort_order)').eq('status','active').gt('quantity',0).order('created_at',{ascending:false})
  if(filters.keyword) q=q.or(`title.ilike.%${filters.keyword}%,oem_number.ilike.%${filters.keyword}%,description.ilike.%${filters.keyword}%`)
- if(filters.vehicle_id) q=q.eq('vehicle_id',filters.vehicle_id)
+ if(filters.vehicle_id && isValidUuid(filters.vehicle_id)) q=q.eq('vehicle_id',filters.vehicle_id)
  else { if(filters.year)q=q.eq('vehicle_year',filters.year); if(filters.make)q=q.eq('vehicle_make',filters.make); if(filters.model)q=q.eq('vehicle_model',filters.model) }
  if(filters.condition)q=q.eq('condition',filters.condition); if(filters.country)q=q.ilike('country_code',`%${filters.country}%`)
  const {data,error}=await q.limit(100);if(error)throw error;listings.value=data||[]
