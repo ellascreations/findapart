@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ middleware: ['auth','supplier'] })
 const supabase = useSupabaseClient()
-const { company, user, loadProfile } = useProfile()
+const { company, loadProfile, resolveUserId } = useProfile()
 const form = reactive({
   title:'', vehicle_id:null as string|null, vehicle_year:'' as number|string, vehicle_make:'', vehicle_model:'', vehicle_variant:'',
   category:'Body', condition:'used', oem_number:'', colour:'', price:'', currency:'AUD', quantity:1,
@@ -18,8 +18,8 @@ const onVehicle=(v:any)=>{
   form.vehicle_variant=[v.series,v.variant,v.bodyType,v.engine].filter(Boolean).join(' · ')
 }
 const submit=async()=>{loading.value=true;errorMessage.value='';try{
- const userId=user.value?.id
- if(!isValidUuid(userId)) throw new Error('Your login session is not ready. Please sign out and sign in again.')
+ const userId=await resolveUserId()
+ if(!isValidUuid(userId)) throw new Error('Unable to verify your signed-in session. Please reload the page and try again.')
  if(!isValidUuid(company.value?.id)) throw new Error('Complete your company profile before adding parts.')
  if(!isValidUuid(form.vehicle_id)) throw new Error('Select a valid vehicle from the structured vehicle catalogue.')
  const payload:any={...form,vehicle_year:form.vehicle_year?Number(form.vehicle_year):null,price:form.price?Number(form.price):null,quantity:Number(form.quantity||0),seller_company_id:company.value.id,created_by:userId}

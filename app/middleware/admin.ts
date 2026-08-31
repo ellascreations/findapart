@@ -1,43 +1,33 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  // Do not make an auth decision during SSR. The Supabase browser session is
-  // restored on hydration and RLS still protects the underlying data.
   if (import.meta.server) return
 
   const supabase = useSupabaseClient()
-  const profileState = useState<any | null>('current-profile', () => null)
+  let { data: userData, error: userError } = await supabase.auth.getUser()
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  let session = sessionData.session
-
-  if (!session && !sessionError) {
-    const { data: refreshData } = await supabase.auth.refreshSession()
-    session = refreshData.session
+  if (userError || !isValidUuid(userData.user?.id)) {
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (!refreshError) {
+      const retry = await supabase.auth.getUser()
+      userData = retry.data
+      userError = retry.error
+    }
   }
 
-  const userId = session?.user?.id
-  if (!isValidUuid(userId)) {
-    return navigateTo({
-      path: '/login',
-      query: { redirect: to.fullPath },
-    })
+  const userId = userData.user?.id
+  if (userError || !isValidUuid(userId)) {
+    return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
   }
 
-  const { data: profileRow, error } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, company_id, companies(*)')
+    .select('id,role,company_id,companies(*)')
     .eq('id', userId)
     .maybeSingle()
 
-  if (error) {
-    console.error('Admin profile check failed:', error)
-    return navigateTo('/?adminError=profile')
+  if (error || !profile || !['admin', 'superadmin'].includes(profile.role)) {
+    return navigateTo('/')
   }
 
-  if (!profileRow || !['admin', 'superadmin'].includes(profileRow.role)) {
-    return navigateTo('/?adminError=forbidden')
-  }
-
-  profileState.value = profileRow
-  const companyState = useState<any | null>('current-company', () => null)
-  companyState.value = (profileRow as any)?.companies || null
+  useState<any | null>('current-profile', () => null).value = profile
+  useState<any | null>('current-company', () => null).value = (profile as any).companies || null
 })

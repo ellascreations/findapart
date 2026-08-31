@@ -1,15 +1,16 @@
 <script setup lang="ts">
 definePageMeta({middleware:['auth']})
-const supabase=useSupabaseClient(); const {company,profile,loadProfile,user}=useProfile()
+const supabase=useSupabaseClient(); const {company,profile,loadProfile,resolveAuthenticatedUser}=useProfile()
 const form=reactive<any>({name:'',abn:'',email:'',phone:'',website:'',address_line1:'',address_line2:'',city:'',state_region:'',postcode:'',country_code:'AU',logo_url:''})
 const loading=ref(false), message=ref(''), errorMessage=ref(''); const logoFile=ref<File|null>(null)
 onMounted(async()=>{await loadProfile(); Object.assign(form,company.value||{})})
 const onLogo=(e:any)=>logoFile.value=e.target.files?.[0]||null
 const save=async()=>{loading.value=true;message.value='';errorMessage.value='';try{
- const userId=user.value?.id
- if(!isValidUuid(userId)) throw new Error('Your login session is not ready. Please sign out and sign in again.')
+ const authUser=await resolveAuthenticatedUser()
+ const userId=authUser?.id
+ if(!isValidUuid(userId)) throw new Error('Unable to verify your signed-in session. Please reload the page and try again.')
  let companyId=isValidUuid(company.value?.id)?company.value.id:null
- if(!companyId){const {data:newCompany,error:createErr}=await supabase.from('companies').insert({name:form.name,type:profile.value?.role==='supplier'?'supplier':'repairer',country_code:form.country_code||'AU',owner_user_id:userId,email:form.email||user.value?.email}).select('id').single();if(createErr)throw createErr;companyId=newCompany.id;const {error:profileErr}=await supabase.from('profiles').update({company_id:companyId}).eq('id',userId);if(profileErr)throw profileErr;await loadProfile()}
+ if(!companyId){const {data:newCompany,error:createErr}=await supabase.from('companies').insert({name:form.name,type:profile.value?.role==='supplier'?'supplier':'repairer',country_code:form.country_code||'AU',owner_user_id:userId,email:form.email||authUser?.email}).select('id').single();if(createErr)throw createErr;companyId=newCompany.id;const {error:profileErr}=await supabase.from('profiles').update({company_id:companyId}).eq('id',userId);if(profileErr)throw profileErr;await loadProfile()}
  let logo=form.logo_url
  if(logoFile.value){const ext=logoFile.value.name.split('.').pop();const path=`${userId}/logo-${Date.now()}.${ext}`;const {error}=await supabase.storage.from('company-logos').upload(path,logoFile.value,{upsert:true});if(error)throw error;logo=supabase.storage.from('company-logos').getPublicUrl(path).data.publicUrl}
  const {error}=await supabase.from('companies').update({...form,logo_url:logo,updated_at:new Date().toISOString()}).eq('id',companyId!);if(error)throw error;await loadProfile();Object.assign(form,company.value||{});message.value='Company profile saved.'

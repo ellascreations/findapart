@@ -11,12 +11,38 @@ export const useProfile = () => {
     return isValidUuid(id) ? id : null
   }
 
+  // Resolve the authenticated user from Supabase itself rather than relying
+  // only on Nuxt's reactive user state. This is much more reliable on Netlify
+  // after a hard refresh or immediately after navigation.
+  const resolveAuthenticatedUser = async () => {
+    const reactiveId = getUserId()
+    if (reactiveId && user.value) return user.value
+
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (!userError && isValidUuid(userData.user?.id)) return userData.user
+
+    // The local session can occasionally need refreshing before getUser()
+    // succeeds. Refresh once, then validate the user again.
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (refreshError) return null
+
+    const { data: refreshedUserData, error: refreshedUserError } = await supabase.auth.getUser()
+    if (refreshedUserError || !isValidUuid(refreshedUserData.user?.id)) return null
+
+    return refreshedUserData.user
+  }
+
+  const resolveUserId = async () => {
+    const authUser = await resolveAuthenticatedUser()
+    return isValidUuid(authUser?.id) ? authUser.id : null
+  }
+
   const loadProfile = async () => {
-    const userId = getUserId()
+    const userId = await resolveUserId()
     if (!userId) {
       profile.value = null
       company.value = null
-      loadError.value = ''
+      loadError.value = 'Unable to verify your signed-in session.'
       return null
     }
 
@@ -55,5 +81,16 @@ export const useProfile = () => {
     loadError.value = ''
   }
 
-  return { user, profile, company, loading, loadError, getUserId, loadProfile, clearProfile }
+  return {
+    user,
+    profile,
+    company,
+    loading,
+    loadError,
+    getUserId,
+    resolveAuthenticatedUser,
+    resolveUserId,
+    loadProfile,
+    clearProfile,
+  }
 }

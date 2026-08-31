@@ -1,21 +1,22 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  // Supabase browser sessions are restored client-side. Avoid rejecting a
-  // perfectly valid logged-in user during the server render on Netlify.
+  // The Supabase browser session is restored client-side. Avoid rejecting a
+  // valid user during Netlify SSR; validate once the route is running client-side.
   if (import.meta.server) return
 
   const supabase = useSupabaseClient()
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  let session = sessionData.session
+  let { data: userData, error: userError } = await supabase.auth.getUser()
 
-  // If the cached session is temporarily unavailable, try a refresh once.
-  if (!session && !sessionError) {
-    const { data: refreshData } = await supabase.auth.refreshSession()
-    session = refreshData.session
+  if (userError || !isValidUuid(userData.user?.id)) {
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (!refreshError) {
+      const retry = await supabase.auth.getUser()
+      userData = retry.data
+      userError = retry.error
+    }
   }
 
-  const userId = session?.user?.id
-  if (!isValidUuid(userId)) {
+  if (userError || !isValidUuid(userData.user?.id)) {
     return navigateTo({
       path: '/login',
       query: { redirect: to.fullPath },
