@@ -6,6 +6,8 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const rows = ref<any[]>([])
 const importCount = ref(0)
+const enrichProgress = reactive({ active:false, processed:0, total:0, batch:0, batches:0, matched:0, inserted:0, updated:0, skipped:0 })
+const enrichMessage = ref('')
 const searchText = ref('')
 const form = reactive({
   year:'', make:'', model:'', series:'', variant:'', model_year:'', body_type:'', engine:'', engine_code:'',
@@ -81,6 +83,99 @@ const importCsv = async (event:any) => {
   finally{loading.value=false;event.target.value=''}
 }
 
+const normaliseHeader = (value:string) => value
+  .replace(/^\uFEFF/, '')
+  .trim()
+  .toLowerCase()
+  .replace(/&/g, 'and')
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '')
+
+const aliasValue = (row:any, aliases:string[]) => {
+  for (const key of aliases) {
+    const value = row[key]
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim()
+  }
+  return ''
+}
+
+const importVariantEnrichment = async (event:any) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  errorMessage.value = ''
+  successMessage.value = ''
+  enrichMessage.value = ''
+  Object.assign(enrichProgress, { active:true, processed:0, total:0, batch:0, batches:0, matched:0, inserted:0, updated:0, skipped:0 })
+
+  try {
+    const text = await file.text()
+    const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter((x:string)=>x.trim())
+    if (lines.length < 2) throw new Error('CSV must contain a header row and at least one vehicle.')
+
+    const headers = parseCsvLine(lines[0]).map(normaliseHeader)
+    const rawRows = lines.slice(1).map((line:string) => {
+      const vals = parseCsvLine(line)
+      const obj:any = {}
+      headers.forEach((h:string,i:number)=>obj[h]=vals[i]||'')
+      return obj
+    })
+
+    const mapped = rawRows.map((r:any) => ({
+      year: aliasValue(r, ['year','year_of_manufacture','model_year','variant_year']),
+      make: aliasValue(r, ['make','manufacturer','vehicle_make']),
+      model: aliasValue(r, ['model','vehicle_model']),
+      variant: aliasValue(r, ['variant','variant_name','badge','grade']),
+      body_type: aliasValue(r, ['body_type','body','body_style','vehicle_body']),
+      engine: aliasValue(r, ['engine','engine_description','engine_type']),
+      transmission: aliasValue(r, ['transmission','transmission_type','gearbox']),
+      fuel_type: aliasValue(r, ['fuel_type','fuel','fueltype','motive_power']),
+      drive_type: aliasValue(r, ['drive_type','drive','drivetrain']),
+      external_source: 'Green Vehicle Guide',
+      external_id: aliasValue(r, ['vehicle_display_id','vehicle_id','id'])
+    })).filter((r:any)=>r.year && r.make && r.model)
+
+    if (!mapped.length) {
+      throw new Error('No usable Year + Make + Model rows were found. Please use a Green Vehicle Guide results CSV.')
+    }
+
+    enrichProgress.total = mapped.length
+    const batchSize = 100
+    enrichProgress.batches = Math.ceil(mapped.length / batchSize)
+
+    for (let i=0;i<mapped.length;i+=batchSize) {
+      const batch = mapped.slice(i,i+batchSize)
+      enrichProgress.batch = Math.floor(i/batchSize)+1
+      enrichMessage.value = `Processing batch ${enrichProgress.batch} of ${enrichProgress.batches}…`
+
+      let result:any = null
+      let lastError:any = null
+      for (let attempt=1; attempt<=2; attempt++) {
+        const { data, error } = await supabase.rpc('enrich_vehicle_catalog', { rows: batch })
+        if (!error) { result = data; lastError = null; break }
+        lastError = error
+      }
+      if (lastError) throw new Error(`Batch ${enrichProgress.batch} failed: ${lastError.message}`)
+
+      enrichProgress.processed += batch.length
+      enrichProgress.matched += Number(result?.matched || 0)
+      enrichProgress.inserted += Number(result?.inserted || 0)
+      enrichProgress.updated += Number(result?.updated || 0)
+      enrichProgress.skipped += Number(result?.skipped || 0)
+    }
+
+    successMessage.value = `Variant enrichment complete: ${enrichProgress.inserted} variant/spec records added, ${enrichProgress.updated} existing records updated, ${enrichProgress.skipped} unmatched/skipped.`
+    enrichMessage.value = 'Complete.'
+    await load()
+  } catch(e:any) {
+    errorMessage.value = e.message || 'Unable to enrich vehicle catalogue.'
+    enrichMessage.value = 'Stopped.'
+  } finally {
+    enrichProgress.active = false
+    event.target.value = ''
+  }
+}
+
 const setActive = async (item:any, active:boolean) => {
   if(!isValidUuid(item?.id)){errorMessage.value='Invalid vehicle ID.';return}
   const { error } = await supabase.from('vehicles').update({active,updated_at:new Date().toISOString()}).eq('id',item.id)
@@ -128,6 +223,34 @@ const setActive = async (item:any, active:boolean) => {
       <div class="code-sample">year,make,model,series,variant,model_year,body_type,engine,engine_code,transmission,fuel_type,drive_type,country_code,external_source,external_id<br>2024,Toyota,Hilux,GUN126R,SR5,MY24,Dual Cab Ute,2.8L Turbo Diesel,1GD-FTV,Automatic,Diesel,4x4,AU,manual,</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;"><label class="btn btn-secondary" style="cursor:pointer;"><input type="file" accept=".csv,text/csv" style="display:none" @change="importCsv">Choose CSV File</label><a href="/templates/vehicle-catalogue-import.csv" class="btn btn-secondary" download>Download CSV Template</a></div>
       <div v-if="importCount" class="muted" style="margin-top:12px;">{{importCount}} records added.</div>
+    </div>
+  </div>
+
+
+  <div class="card" style="margin-top:24px;padding:22px;">
+    <h2 style="margin-top:0;">Green Vehicle Guide Variant Enrichment</h2>
+    <p class="muted">Upload a CSV exported from the Australian Government Green Vehicle Guide. Find a Part matches each row to the existing Year → Make → Model catalogue, then adds the available Variant/Badge, Body, Engine, Transmission, Fuel and Drive details. Base catalogue vehicles are retained.</p>
+    <div class="code-sample">Recognised headings include: Year, Make/Manufacturer, Model, Variant/Badge, Body, Engine, Transmission, Fuel type and Drive. Extra Green Vehicle Guide columns are safely ignored.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center;">
+      <label class="btn btn-secondary" :style="enrichProgress.active ? 'opacity:.6;pointer-events:none;' : 'cursor:pointer;'">
+        <input type="file" accept=".csv,text/csv" style="display:none" :disabled="enrichProgress.active" @change="importVariantEnrichment">
+        {{ enrichProgress.active ? 'Importing Variants…' : 'Choose Green Vehicle Guide CSV' }}
+      </label>
+      <span v-if="enrichMessage" class="muted">{{ enrichMessage }}</span>
+    </div>
+
+    <div v-if="enrichProgress.total" style="margin-top:18px;">
+      <div style="height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;">
+        <div :style="`height:100%;width:${Math.round((enrichProgress.processed/enrichProgress.total)*100)}%;background:currentColor;transition:width .2s;`"></div>
+      </div>
+      <div class="muted" style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;">
+        <span>{{ enrichProgress.processed.toLocaleString() }} / {{ enrichProgress.total.toLocaleString() }} processed</span>
+        <span>Batch {{ enrichProgress.batch }} / {{ enrichProgress.batches }}</span>
+        <span>Matched {{ enrichProgress.matched.toLocaleString() }}</span>
+        <span>Added {{ enrichProgress.inserted.toLocaleString() }}</span>
+        <span>Updated {{ enrichProgress.updated.toLocaleString() }}</span>
+        <span>Skipped {{ enrichProgress.skipped.toLocaleString() }}</span>
+      </div>
     </div>
   </div>
 
