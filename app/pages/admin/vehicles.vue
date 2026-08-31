@@ -127,7 +127,10 @@ const importVariantEnrichment = async (event:any) => {
       model: aliasValue(r, ['model','vehicle_model']),
       variant: aliasValue(r, ['variant','variant_name','badge','grade']),
       body_type: aliasValue(r, ['body_type','body','body_style','vehicle_body']),
+      model_year: aliasValue(r, ['model_year','model_release_version','modelreleaseversion']),
       engine: aliasValue(r, ['engine','engine_description','engine_type']),
+      engine_code: aliasValue(r, ['engine_code']),
+      engine_size: aliasValue(r, ['engine_size','engine_displacement','enginedisplacement']),
       transmission: aliasValue(r, ['transmission','transmission_type','gearbox']),
       fuel_type: aliasValue(r, ['fuel_type','fuel','fueltype','motive_power']),
       drive_type: aliasValue(r, ['drive_type','drive','drivetrain']),
@@ -155,7 +158,12 @@ const importVariantEnrichment = async (event:any) => {
         if (!error) { result = data; lastError = null; break }
         lastError = error
       }
-      if (lastError) throw new Error(`Batch ${enrichProgress.batch} failed: ${lastError.message}`)
+      if (lastError) {
+        const extra = [lastError.code, lastError.details, lastError.hint].filter(Boolean).join(' · ')
+        const message = `Batch ${enrichProgress.batch} failed: ${lastError.message}${extra ? ` (${extra})` : ''}`
+        enrichMessage.value = message
+        throw new Error(message)
+      }
 
       enrichProgress.processed += batch.length
       enrichProgress.matched += Number(result?.matched || 0)
