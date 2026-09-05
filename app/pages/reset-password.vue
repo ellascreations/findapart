@@ -18,11 +18,27 @@ const prepareRecoverySession = async () => {
   try {
     if (!import.meta.client) return
 
-    const code = typeof route.query.code === 'string' ? route.query.code : ''
+    const tokenHash = typeof route.query.token_hash === 'string' ? route.query.token_hash : ''
+    const type = typeof route.query.type === 'string' ? route.query.type : ''
+    const legacyCode = typeof route.query.code === 'string' ? route.query.code : ''
 
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code)
+    // Preferred SSR-safe recovery flow. The recovery email points directly to
+    // /reset-password with Supabase's TokenHash, so there is no browser-local
+    // PKCE verifier to lose when the link is opened in another browser/device.
+    if (tokenHash && type === 'recovery') {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: 'recovery',
+      })
       if (error) throw error
+
+      // Remove the one-time token from the address bar after successful verification.
+      await navigateTo('/reset-password', { replace: true })
+    } else if (legacyCode) {
+      // Old PKCE reset links depend on the verifier remaining in the exact browser
+      // that requested the reset. Give a clear recovery path rather than surfacing
+      // the confusing "PKCE code verifier not found" SDK error.
+      throw new Error('This is an older password reset link and cannot be verified reliably. Please request a new password reset email.')
     }
 
     const { data, error } = await supabase.auth.getSession()
