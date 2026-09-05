@@ -12,19 +12,46 @@ const successMessage = ref('')
 
 let authSubscription: { unsubscribe: () => void } | null = null
 
+const cleanRecoveryUrl = () => {
+  if (!import.meta.client) return
+  window.history.replaceState({}, document.title, '/reset-password')
+}
+
 const prepareRecoverySession = async () => {
   errorMessage.value = ''
 
   try {
     if (!import.meta.client) return
 
+    // 1. Supabase default-template + implicit recovery flow.
+    // The Supabase verify endpoint redirects here with the session in #... .
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const accessToken = hash.get('access_token') || ''
+    const refreshToken = hash.get('refresh_token') || ''
+    const hashType = hash.get('type') || ''
+    const hashError = hash.get('error_description') || hash.get('error') || ''
+
+    if (hashError) {
+      throw new Error(decodeURIComponent(hashError.replace(/\+/g, ' ')))
+    }
+
+    if (accessToken && refreshToken) {
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+      if (error) throw error
+
+      recoveryReady.value = true
+      cleanRecoveryUrl()
+      return
+    }
+
+    // 2. Token-hash recovery remains supported if SMTP/template
+    // customisation is enabled in future.
     const tokenHash = typeof route.query.token_hash === 'string' ? route.query.token_hash : ''
     const type = typeof route.query.type === 'string' ? route.query.type : ''
-    const legacyCode = typeof route.query.code === 'string' ? route.query.code : ''
 
-    // Preferred SSR-safe recovery flow. The recovery email points directly to
-    // /reset-password with Supabase's TokenHash, so there is no browser-local
-    // PKCE verifier to lose when the link is opened in another browser/device.
     if (tokenHash && type === 'recovery') {
       const { error } = await supabase.auth.verifyOtp({
         token_hash: tokenHash,
@@ -32,23 +59,38 @@ const prepareRecoverySession = async () => {
       })
       if (error) throw error
 
-      // Remove the one-time token from the address bar after successful verification.
-      await navigateTo('/reset-password', { replace: true })
-    } else if (legacyCode) {
-      // Old PKCE reset links depend on the verifier remaining in the exact browser
-      // that requested the reset. Give a clear recovery path rather than surfacing
-      // the confusing "PKCE code verifier not found" SDK error.
-      throw new Error('This is an older password reset link and cannot be verified reliably. Please request a new password reset email.')
+      recoveryReady.value = true
+      cleanRecoveryUrl()
+      return
     }
 
+    // 3. Support existing PKCE emails when the matching verifier is still
+    // available in this browser. New reset requests use the implicit flow.
+    const code = typeof route.query.code === 'string' ? route.query.code : ''
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) {
+        if (/code verifier/i.test(error.message || '')) {
+          throw new Error('This reset link was created with the older PKCE recovery flow and its browser verification data is no longer available. Please request a new password reset link from the Forgot Password page.')
+        }
+        throw error
+      }
+
+      recoveryReady.value = true
+      cleanRecoveryUrl()
+      return
+    }
+
+    // 4. A recovery session may already have been established automatically.
     const { data, error } = await supabase.auth.getSession()
     if (error) throw error
 
-    recoveryReady.value = Boolean(data.session)
-
-    if (!data.session) {
-      errorMessage.value = 'This password reset link is invalid or has expired. Please request a new reset link.'
+    if (data.session) {
+      recoveryReady.value = true
+      return
     }
+
+    errorMessage.value = 'This password reset link is invalid or has expired. Please request a new reset link.'
   } catch (e: any) {
     recoveryReady.value = false
     errorMessage.value = e?.message || 'Unable to verify this password reset link.'

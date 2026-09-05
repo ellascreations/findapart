@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const supabase = useSupabaseClient()
+import { createClient } from '@supabase/supabase-js'
+
+const runtimeConfig = useRuntimeConfig()
 const email = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -13,9 +15,31 @@ const sendReset = async () => {
   try {
     if (!import.meta.client) return
 
+    const config = runtimeConfig.public.supabase as {
+      url?: string
+      key?: string
+    }
+
+    if (!config?.url || !config?.key) {
+      throw new Error('Supabase is not configured for password recovery.')
+    }
+
+    // Password recovery intentionally uses an isolated client-side client with
+    // the implicit flow. Supabase's default recovery email can then return the
+    // recovery session in the URL fragment, so no PKCE verifier is required.
+    // This is useful while using Supabase's locked/default email template.
+    const recoveryClient = createClient(config.url, config.key, {
+      auth: {
+        flowType: 'implicit',
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+
     const redirectTo = `${window.location.origin}/reset-password`
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email.value.trim(), {
+    const { error } = await recoveryClient.auth.resetPasswordForEmail(email.value.trim(), {
       redirectTo,
     })
 
